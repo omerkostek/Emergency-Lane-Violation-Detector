@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALPR Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0b0e14;
+            color: #c9d1d9;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ---- Header ---- */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 20px;
+            background: #161b22;
+            border-bottom: 1px solid #21262d;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #e6edf3;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            background: #1c2128;
+            border: 1px solid #30363d;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #484f58;
+            transition: background 0.3s;
+        }
+
+        .status-dot.active {
+            background: #3fb950;
+            box-shadow: 0 0 8px #3fb95066;
+        }
+
+        .status-dot.calibrating {
+            background: #d29922;
+            box-shadow: 0 0 8px #d2992266;
+        }
+
+        /* ---- Main Layout ---- */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ---- Left Panel: Video ---- */
+        .left-panel {
+            flex: 0 0 65%;
+            display: flex;
+            flex-direction: column;
+            background: #0d1117;
+            border-right: 1px solid #21262d;
+        }
+
+        .controls-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: #161b22;
+            border-bottom: 1px solid #21262d;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        .controls-bar select,
+        .controls-bar button {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 7px 14px;
+            background: #21262d;
+            color: #e6edf3;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .controls-bar select:hover,
+        .controls-bar button:hover {
+            border-color: #58a6ff;
+            background: #282e36;
+        }
+
+        .controls-bar select {
+            min-width: 180px;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #238636, #2ea043) !important;
+            border-color: #2ea043 !important;
+            font-weight: 600;
+        }
+
+        .btn-start:hover {
+            background: linear-gradient(135deg, #2ea043, #3fb950) !important;
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #8b2029, #da3633) !important;
+            border-color: #da3633 !important;
+            font-weight: 600;
+        }
+
+        .btn-stop:hover {
+            background: linear-gradient(135deg, #da3633, #f85149) !important;
+        }
+
+        .btn-pause {
+            background: linear-gradient(135deg, #d29922, #e3b341) !important;
+            border-color: #e3b341 !important;
+            font-weight: 600;
+            color: #000 !important;
+        }
+
+        .btn-pause:hover {
+            background: linear-gradient(135deg, #e3b341, #f2cc60) !important;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #8b949e;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            accent-color: #58a6ff;
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+        }
+
+        .video-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #010409;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .video-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            cursor: crosshair;
+        }
+
+        .video-placeholder {
+            color: #484f58;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 600;
+        }
+
+        .calibration-hint {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            font-size: 12px;
+            color: #e6edf3;
+            white-space: nowrap;
+            display: none;
+        }
+
+        .calibration-hint.visible {
+            display: block;
+        }
+
+        .calibration-hint kbd {
+            background: #21262d;
+            border: 1px solid #484f58;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 11px;
+            font-family: 'Inter', monospace;
+            color: #58a6ff;
+        }
+
+        /* ---- Right Panel: Dashboard ---- */
+        .right-panel {
+            flex: 0 0 35%;
+            display: flex;
+            flex-direction: column;
+            background: #0d1117;
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            padding: 14px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #8b949e;
+            border-bottom: 1px solid #21262d;
+            background: #161b22;
+            flex-shrink: 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            padding: 14px 16px;
+            flex-shrink: 0;
+        }
+
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 10px;
+            padding: 14px 10px;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+
+        .stat-card:hover {
+            border-color: #30363d;
+        }
+
+        .stat-card .label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: #8b949e;
+            margin-bottom: 6px;
+        }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .stat-card .value.total {
+            color: #e6edf3;
+        }
+
+        .stat-card .value.readable {
+            color: #3fb950;
+        }
+
+        .stat-card .value.ghost {
+            color: #f85149;
+        }
+
+        /* ---- Table ---- */
+        .table-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 16px 16px;
+        }
+
+        .table-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            flex-shrink: 0;
+        }
+
+        .table-header-row span {
+            font-size: 10px;
+            color: #484f58;
+            font-family: monospace;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 12px;
+        }
+
+        thead th {
+            position: sticky;
+            top: 0;
+            background: #161b22;
+            color: #8b949e;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 10px 10px;
+            text-align: left;
+            border-bottom: 1px solid #21262d;
+        }
+
+        tbody tr {
+            transition: background 0.15s;
+        }
+
+        tbody tr:hover {
+            background: #161b22;
+        }
+
+        tbody td {
+            padding: 9px 10px;
+            border-bottom: 1px solid #21262d08;
+            color: #c9d1d9;
+        }
+
+        .plate-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Inter', monospace;
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.8px;
+        }
+
+        .plate-badge.readable {
+            background: #0d2818;
+            color: #3fb950;
+            border: 1px solid #23863640;
+        }
+
+        .plate-badge.unreadable {
+            background: #2d0a0e;
+            color: #f85149;
+            border: 1px solid #da363340;
+        }
+
+        .plate-badge.scanning {
+            background: #1c1c00;
+            color: #d29922;
+            border: 1px solid #d2992240;
+        }
+
+        .second-badge {
+            background: #21262d;
+            border: 1px solid #30363d;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #8b949e;
+        }
+
+        .confidence-text {
+            font-family: monospace;
+            font-size: 11px;
+            color: #8b949e;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>Violation Control Center</h1>
+        <div class="status-badge">
+            <div class="status-dot" id="status-dot"></div>
+            <span id="status-text">IDLE</span>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="main-container">
+
+        <!-- Left Panel: Video Feed -->
+        <div class="left-panel">
+            <div class="controls-bar">
+                <select id="video-select">
+                    <option value="">Loading videos...</option>
+                </select>
+                <button class="btn-start" id="btn-start" onclick="startPipeline()">▶ Start</button>
+                <button class="btn-pause" id="btn-pause" style="display:none;" onclick="togglePause()">⏸ Pause</button>
+                <button class="btn-stop" id="btn-stop" onclick="stopPipeline()">■ Stop</button>
+            </div>
+
+            <div class="video-container" id="video-container">
+                <span class="video-placeholder" id="video-placeholder">Select a video and press Start</span>
+                <img id="video-feed" src="" style="display:none;" alt="Video Feed">
+                <div class="calibration-hint" id="cal-hint">
+                    <span id="cal-hint-text">Detecting lanes with AI model...</span>
+                    <button id="btn-next-frame" style="display:none; margin-left:16px; padding:8px 20px;
+                        background:linear-gradient(135deg,#30363d,#484f58); border:1px solid #8b949e; border-radius:6px;
+                        color:#fff; font-weight:700; font-size:13px; cursor:pointer; font-family:Inter,sans-serif;"
+                        onclick="nextFrameCalibration()">Jump 10 Frames</button>
+                    <button id="btn-confirm" style="display:none; margin-left:8px; padding:8px 20px;
+                        background:linear-gradient(135deg,#1f6feb,#388bfd); border:none; border-radius:6px;
+                        color:#fff; font-weight:700; font-size:13px; cursor:pointer; font-family:Inter,sans-serif;"
+                        onclick="confirmCalibration()">Confirm & Start Tracking</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Dashboard -->
+        <div class="right-panel">
+            <div class="panel-title">Analytics Dashboard</div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="label">Total Violations</div>
+                    <div class="value total" id="stat-total">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Readable Plates</div>
+                    <div class="value readable" id="stat-readable">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Unreadable Plates</div>
+                    <div class="value ghost" id="stat-ghost">0</div>
+                </div>
+            </div>
+
+            <div class="table-header-row">
+                <div class="panel-title" style="border:none; padding:0; background:none;">Recent Violations</div>
+                <span>Auto-refresh 3s</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Source</th>
+                            <th>Second</th>
+                            <th>Plate</th>
+                            <th style="text-align:right">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="5" style="text-align:center; color:#484f58; padding:30px;">No records yet</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const videoFeed = document.getElementById('video-feed');
+        const placeholder = document.getElementById('video-placeholder');
+        const calHint = document.getElementById('cal-hint');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        let pipelineActive = false;
+        let frameWidth = 0, frameHeight = 0;
+
+        // Load available videos
+        async function loadVideos() {
+            try {
+                const res = await fetch('/api/videos');
+                const videos = await res.json();
+                const sel = document.getElementById('video-select');
+                sel.innerHTML = '';
+                videos.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v;
+                    opt.textContent = v;
+                    sel.appendChild(opt);
+                });
+            } catch (e) { console.error('Failed to load videos:', e); }
+        }
+
+        // Start pipeline
+        async function startPipeline() {
+            const video = document.getElementById('video-select').value;
+            if (!video) return;
+
+            await fetch('/api/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ video: video })
+            });
+
+            pipelineActive = true;
+            // Small delay to let the pipeline push first frame
+            setTimeout(() => {
+                placeholder.style.display = 'none';
+                videoFeed.style.display = 'block';
+                videoFeed.src = '/video_feed?' + Date.now();
+            }, 500);
+        }
+
+        // Stop pipeline
+        async function stopPipeline() {
+            await fetch('/api/stop', { method: 'POST' });
+            pipelineActive = false;
+            document.getElementById('btn-pause').style.display = 'none';
+        }
+
+        // Pause/Resume pipeline
+        let isPaused = false;
+        async function togglePause() {
+            if (isPaused) {
+                await fetch('/api/resume', { method: 'POST' });
+                isPaused = false;
+            } else {
+                await fetch('/api/pause', { method: 'POST' });
+                isPaused = true;
+            }
+        }
+
+        // Confirm calibration
+        async function confirmCalibration() {
+            document.getElementById('btn-confirm').disabled = true;
+            document.getElementById('btn-next-frame').disabled = true;
+            document.getElementById('btn-confirm').textContent = 'Starting...';
+            await fetch('/api/confirm', { method: 'POST' });
+        }
+
+        // Next frame calibration
+        async function nextFrameCalibration() {
+            document.getElementById('btn-confirm').disabled = true;
+            document.getElementById('btn-next-frame').disabled = true;
+            document.getElementById('btn-next-frame').textContent = 'Loading...';
+            await fetch('/api/next_frame', { method: 'POST' });
+        }
+
+        // Poll status & dashboard data
+        async function pollStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+
+                frameWidth = data.frame_width;
+                frameHeight = data.frame_height;
+
+                statusDot.className = 'status-dot';
+                const confirmBtn = document.getElementById('btn-confirm');
+                const nextFrameBtn = document.getElementById('btn-next-frame');
+                const calHintText = document.getElementById('cal-hint-text');
+
+                if (data.state === 'detecting') {
+                    statusDot.classList.add('calibrating');
+                    statusText.textContent = 'DETECTING LANES';
+                    calHint.classList.add('visible');
+                    calHintText.textContent = 'AI model detecting lanes...';
+                    confirmBtn.style.display = 'none';
+                    nextFrameBtn.style.display = 'none';
+                } else if (data.state === 'calibrating') {
+                    statusDot.classList.add('calibrating');
+                    statusText.textContent = 'AWAITING CONFIRMATION';
+                    calHint.classList.add('visible');
+                    calHintText.textContent = 'Lane detection complete. Review the detected lanes.';
+
+                    nextFrameBtn.style.display = 'inline-block';
+                    nextFrameBtn.disabled = false;
+                    nextFrameBtn.textContent = 'Jump 10 Frames';
+
+                    confirmBtn.style.display = 'inline-block';
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Confirm & Start Tracking';
+                } else if (data.state === 'tracking') {
+                    statusDot.classList.add('active');
+                    statusText.textContent = `TRACKING · ${data.fps} FPS · Frame ${data.frame_count}`;
+                    calHint.classList.remove('visible');
+
+                    const pauseBtn = document.getElementById('btn-pause');
+                    pauseBtn.style.display = 'inline-block';
+                    pauseBtn.textContent = '⏸ Pause';
+                    isPaused = false;
+                } else if (data.state === 'paused') {
+                    statusDot.classList.add('calibrating');
+                    statusText.textContent = `PAUSED · Frame ${data.frame_count}`;
+                    calHint.classList.remove('visible');
+
+                    const pauseBtn = document.getElementById('btn-pause');
+                    pauseBtn.style.display = 'inline-block';
+                    pauseBtn.textContent = '▶ Resume';
+                    isPaused = true;
+                } else if (data.state === 'done') {
+                    statusText.textContent = 'DONE';
+                    calHint.classList.remove('visible');
+                    pipelineActive = false;
+                    document.getElementById('btn-pause').style.display = 'none';
+                } else {
+                    statusText.textContent = 'IDLE';
+                    calHint.classList.remove('visible');
+                }
+            } catch (e) { }
+        }
+
+        async function pollDashboard() {
+            try {
+                const statsRes = await fetch('/api/stats');
+                const stats = await statsRes.json();
+                document.getElementById('stat-total').textContent = stats.total_violations;
+                document.getElementById('stat-readable').textContent = stats.readable_plates;
+                document.getElementById('stat-ghost').textContent = stats.ghost_vehicles;
+
+                const tableRes = await fetch('/api/violations');
+                const rows = await tableRes.json();
+                const tbody = document.getElementById('table-body');
+
+                if (rows.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#484f58; padding:30px;">No records yet</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                rows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    let badgeClass = 'scanning';
+                    if (row.license_plate === 'Unreadable') badgeClass = 'unreadable';
+                    else if (row.license_plate !== 'Scanning...') badgeClass = 'readable';
+
+                    tr.innerHTML = `
+                    <td style="font-family:monospace; font-size:11px; color:#8b949e;">${row.timestamp}</td>
+                    <td>${row.video_source}</td>
+                    <td><span class="second-badge">${row.video_second}s</span></td>
+                    <td><span class="plate-badge ${badgeClass}">${row.license_plate}</span></td>
+                    <td style="text-align:right" class="confidence-text">${(row.confidence * 100).toFixed(1)}%</td>
+                `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) { }
+        }
+
+        // Init
+        loadVideos();
+        setInterval(pollStatus, 1000);
+        setInterval(pollDashboard, 3000);
+    </script>
+</body>
+
+</html>
