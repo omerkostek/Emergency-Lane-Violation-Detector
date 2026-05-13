@@ -1,7 +1,6 @@
 # Exclude specific folders requested by user
 input_videos/
 .report_files/
-report_files
 run_commands.txt
 database/
 training_results/
