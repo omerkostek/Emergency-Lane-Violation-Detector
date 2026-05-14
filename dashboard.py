@@ -5,7 +5,6 @@
 # the HTML template. All real logic lives in api/ and core/.
 #
 # Run:  python dashboard.py
-# ─────────────────────────────────────────────────────────────
 
 import os
 import uvicorn
@@ -17,26 +16,26 @@ from api.routes_pipeline import router as pipeline_router
 from api.routes_calibration import router as calibration_router
 from api.routes_data import router as data_router
 
-# ── App setup ─────────────────────────────────────────────────
+# App setup 
 app = FastAPI(title="Emergency Lane Violation Detector")
 
 os.makedirs("templates", exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 
-# ── Mount route groups ────────────────────────────────────────
+# Mount route groups 
 app.include_router(pipeline_router)
 app.include_router(calibration_router)
 app.include_router(data_router)
 
 
-# ── HTML page ─────────────────────────────────────────────────
+# HTML page 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Serve the single-page dashboard."""
     return templates.TemplateResponse(name="index.html", request=request)
 
 
-# ── Startup ───────────────────────────────────────────────────
+# Startup 
 if __name__ == "__main__":
     print("\n  Emergency Lane Violation Detector")
     print("  http://127.0.0.1:8000\n")

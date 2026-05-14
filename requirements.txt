@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────
+# Emergency Lane Violation Detector
+# Requirements
+# ─────────────────────────────────────────────
+
+# Web framework & server
+fastapi>=0.136.1
+uvicorn>=0.46.0
+jinja2>=3.1.6
+pydantic>=2.12.5
+
+# Computer vision & object detection
+opencv-python>=4.13.0.92
+ultralytics>=8.4.25
+
+# License plate recognition (fast-alpr)
+# Install from the local submodule:
+#   pip install -e ./fast-alpr
+# Or from PyPI:
+fast-alpr>=0.4.0
+fast-plate-ocr>=1.1.0
+open-image-models>=0.5.1
+
+# ONNX runtime (required by fast-alpr)
+onnxruntime>=1.18.0
