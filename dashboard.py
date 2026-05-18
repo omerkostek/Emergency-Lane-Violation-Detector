@@ -38,5 +38,5 @@ async def index(request: Request):
 # Startup 
 if __name__ == "__main__":
     print("\n  Emergency Lane Violation Detector")
-    print("  http://127.0.0.1:8000\n")
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
+    print("  http://127.0.0.1:8001\n")
+    uvicorn.run(app, host="127.0.0.1", port=8001, log_level="warning")

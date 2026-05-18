@@ -52,7 +52,7 @@ def _calibration_web(cap, web_state: WebState):
     while not web_state.confirm_event.is_set():
         # After the first frame, skip 9 frames so each 'Next' = 10 frames
         if frame_count > 0:
-            for _ in range(9):
+            for _ in range(29):
                 cap.read()
                 frame_count += 1
 
@@ -194,7 +194,7 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
     if result is None:
         return   # User aborted or video error
 
-    normal_polys, unauthorized_polys, frame_count = result
+    normal_polys, unauthorized_polys, _ = result
 
     # ── Phase 3: Vehicle tracking + ALPR + violations ─────────
     print("--- PHASE 3: STARTING LIVE TRACKING ---")
@@ -202,7 +202,10 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
     # Initialise database (creates file + table if needed)
     conn, cur = init_db()
 
-    # Continue reading from the same cap position (no seek back to start)
+    # Restart video from the beginning so tracking covers the full footage
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    frame_count = 0
+
     crop_queue = queue.Queue(maxsize=100)
     best_plates: dict = {}
 
