@@ -62,7 +62,7 @@ async def start_pipeline(req: StartRequest):
 
     def run():
         try:
-            process_video_stream(video_path, True, None, web_state=new_ws)
+            process_video_stream(video_path, True, new_ws)
         except Exception as e:
             print(f"Pipeline error: {e}")
             import traceback; traceback.print_exc()

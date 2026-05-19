@@ -9,7 +9,7 @@ import os
 
 # ── Model paths ──────────────────────────────────────────────
 # Custom-trained YOLO segmentation model for lane detection.
-LANE_MODEL_PATH = "training_results/weights/best.pt"
+LANE_MODEL_PATH = "train_results/weights/best.pt"
 
 # Pre-trained YOLO model used for vehicle detection & tracking.
 VEHICLE_MODEL_PATH = "yolo26n.pt"
