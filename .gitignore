@@ -3,8 +3,8 @@ input_videos/
 .report_files/
 run_commands.txt
 database/
-training_results/
 test_results/
+train_results/
 
 # Common Python ignores
 __pycache__/
