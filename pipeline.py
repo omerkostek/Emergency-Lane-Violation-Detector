@@ -85,6 +85,18 @@ def _calibration_web(cap, web_state: WebState):
     return None
 
 
+# ── IoU helper ────────────────────────────────────────────────
+
+def _iou(b1, b2) -> float:
+    xi1, yi1 = max(b1[0], b2[0]), max(b1[1], b2[1])
+    xi2, yi2 = min(b1[2], b2[2]), min(b1[3], b2[3])
+    inter = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+    a1 = (b1[2] - b1[0]) * (b1[3] - b1[1])
+    a2 = (b2[2] - b2[0]) * (b2[3] - b2[1])
+    union = a1 + a2 - inter
+    return inter / union if union > 0 else 0.0
+
+
 # ── HUD drawing ───────────────────────────────────────────────
 
 def _draw_vehicle_hud(frame, x1, y1, x2, y2, track_id, box_color,
@@ -93,31 +105,25 @@ def _draw_vehicle_hud(frame, x1, y1, x2, y2, track_id, box_color,
     """Draw bounding box, plate text, and violation status for one vehicle."""
     cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
 
-    display_text = f"ID: {track_id}"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    # Sol üst — Vehicle ID
+    cv2.putText(frame, f"ID: {track_id}", (x1 + 4, y1 + 18), font, 0.6, box_color, 2)
 
     if plate_info:
-        display_text += f" | {plate_info['text']} ({plate_info['confidence']:.2f})"
-        if 'norm_box' in plate_info and plate_info['confidence'] < PLATE_LOCKED_THRESHOLD:
-            nx1, ny1, nx2, ny2 = plate_info['norm_box']
-            car_w, car_h = x2 - x1, y2 - y1
-            px1, py1 = x1 + int(nx1 * car_w), y1 + int(ny1 * car_h)
-            px2, py2 = x1 + int(nx2 * car_w), y1 + int(ny2 * car_h)
-            cv2.rectangle(frame, (px1, py1), (px2, py2), (0, 165, 255), 2)
-            cv2.putText(frame, plate_info['text'], (px1, py1 - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
-        cv2.putText(frame, display_text, (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, box_color, 2)
+        # Sol alt — Plate text
+        cv2.putText(frame, plate_info['text'], (x1 + 4, y2 - 6), font, 0.6, box_color, 2)
+
+        # Sağ üst — Confidence
+        conf_text = f"{plate_info['confidence']:.2f}"
+        (conf_w, _), _ = cv2.getTextSize(conf_text, font, 0.6, 2)
+        cv2.putText(frame, conf_text, (x2 - conf_w - 4, y1 + 18), font, 0.6, box_color, 2)
+
     elif use_turkish_logic and attempt_count >= 6:
-        display_text += " | Plate Unreadable!"
-        cv2.putText(frame, display_text, (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-    else:
-        cv2.putText(frame, display_text, (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, box_color, 2)
+        cv2.putText(frame, "PLATE?", (x1 + 4, y2 - 6), font, 0.6, (0, 0, 255), 2)
 
     if status_text:
-        cv2.putText(frame, status_text, (x1 + 4, y2 - 6),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
+        cv2.putText(frame, status_text, (x1 + 4, y2 - 22), font, 0.6, status_color, 2)
 
 
 # ── Main entry point ──────────────────────────────────────────
@@ -166,7 +172,17 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
     if video_fps <= 0:
         video_fps = 30
 
-    violation_mgr = ViolationManager(video_fps, VIOLATION_SECONDS_THRESHOLD)
+    violation_mgr = ViolationManager(VIOLATION_SECONDS_THRESHOLD)
+
+    last_seen_boxes: dict[int, tuple] = {}
+    lost_at_frame:   dict[int, int]   = {}
+    prev_track_ids:  set[int]         = set()
+    REIDENTIFY_WINDOW = int(video_fps * 4)
+    REIDENTIFY_IOU    = 0.25
+
+    recent_violations: list[dict] = []  # [{db_row_id, cx, cy, timestamp}, ...]
+    DEDUP_RADIUS  = 150   # piksel — aynı araç sayılacak maksimum mesafe
+    DEDUP_WINDOW  = 10.0  # saniye — tekrar kayıt engellenecek süre
     web_state.state = "tracking"
 
     # ── Main tracking loop ────────────────────────────────────
@@ -194,14 +210,40 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
         if results and results[0].boxes and results[0].boxes.id is not None:
             boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
             track_ids = results[0].boxes.id.cpu().numpy().astype(int)
+            current_track_ids = set(track_ids.tolist())
+
+            for lost_id in prev_track_ids - current_track_ids:
+                lost_at_frame[lost_id] = frame_count
+
+            for new_id in current_track_ids - prev_track_ids:
+                new_box = next(b for b, tid in zip(boxes, track_ids) if tid == new_id)
+                best_old_id, best_iou = None, 0.0
+                for old_id, lost_frame in list(lost_at_frame.items()):
+                    if frame_count - lost_frame > REIDENTIFY_WINDOW:
+                        continue
+                    if old_id not in last_seen_boxes:
+                        continue
+                    iou = _iou(new_box, last_seen_boxes[old_id])
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_old_id = old_id
+                if best_old_id is not None and best_iou >= REIDENTIFY_IOU:
+                    violation_mgr.transfer_state(best_old_id, new_id)
+                    for d in (best_plates, attempt_counts, last_queued_frame, violation_dict):
+                        if best_old_id in d:
+                            d[new_id] = d[best_old_id]
+                            del d[best_old_id]
+                    del lost_at_frame[best_old_id]
 
             for box, track_id in zip(boxes, track_ids):
                 x1, y1, x2, y2 = box
-                cx = (x1 + x2) // 2
-                cy = y2
-
+                cy = float(y2)
+                sample_xs = [x1 + (x2 - x1) * i / 9 for i in range(10)]
                 in_unauthorized = any(
-                    cv2.pointPolygonTest(poly, (float(cx), float(cy)), False) >= 0
+                    sum(
+                        cv2.pointPolygonTest(poly, (float(sx), cy), False) >= 0
+                        for sx in sample_xs
+                    ) / len(sample_xs) >= 0.4
                     for poly in unauthorized_polys
                 )
 
@@ -212,9 +254,34 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
                         and violation_mgr.already_violated(track_id)):
                     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     vsec = int(frame_count / video_fps)
+                    vtime = f"{vsec // 60}:{vsec % 60:02d}"
                     src_name = os.path.basename(video_source)
-                    db_id = insert_violation(cur, ts, src_name, vsec)
-                    conn.commit()
+                    cx = (x1 + x2) // 2
+                    cy = (y1 + y2) // 2
+                    now = time.time()
+
+                    # Yakın konumda zaten kayıtlı bir ihlal var mı kontrol et
+                    dup_db_id = None
+                    for rv in recent_violations:
+                        if now - rv["timestamp"] > DEDUP_WINDOW:
+                            continue
+                        dist = ((cx - rv["cx"]) ** 2 + (cy - rv["cy"]) ** 2) ** 0.5
+                        if dist < DEDUP_RADIUS:
+                            dup_db_id = rv["db_row_id"]
+                            break
+
+                    if dup_db_id is not None:
+                        db_id = dup_db_id  # Yeni satır açma, mevcut kaydı devral
+                    else:
+                        db_id = insert_violation(cur, ts, src_name, vtime)
+                        existing_plate = best_plates.get(track_id)
+                        if existing_plate:
+                            update_plate(cur, db_id, existing_plate['text'], existing_plate['confidence'])
+                        conn.commit()
+                        recent_violations.append({
+                            "db_row_id": db_id, "cx": cx, "cy": cy, "timestamp": now
+                        })
+
                     violation_dict[track_id] = {
                         "db_row_id": db_id,
                         "timestamp": ts,
@@ -249,6 +316,14 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
                     track_id, box_color, status_text, status_color,
                     plate_info, use_turkish_logic, attempt_counts[track_id]
                 )
+
+                last_seen_boxes[track_id] = (x1, y1, x2, y2)
+
+            prev_track_ids = current_track_ids
+        else:
+            for lost_id in prev_track_ids:
+                lost_at_frame[lost_id] = frame_count
+            prev_track_ids = set()
 
         for t_id, v_data in violation_dict.items():
             db_id = v_data.get("db_row_id")

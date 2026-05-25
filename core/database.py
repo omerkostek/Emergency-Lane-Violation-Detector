@@ -20,19 +20,19 @@ from core.config import DB_DIR, DB_PATH
 # SQL to create the violations table if it doesn't already exist
 _CREATE_TABLE_SQL = '''
     CREATE TABLE IF NOT EXISTS violations (
-        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        vehicle_id      INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp       DATETIME,
-        video_source    TEXT,
-        video_second    INTEGER,
+        input_source    TEXT,
+        violation_time  TEXT,
         license_plate   TEXT,
-        confidence      REAL
+        ALPR_confidence REAL
     )
 '''
 
 
 def init_db():
     """Open (or create) the violations database and ensure the schema exists.
-    
+
     Returns:
         (conn, cur): A (connection, cursor) tuple ready for use.
     """
@@ -44,16 +44,16 @@ def init_db():
     return conn, cur
 
 
-def insert_violation(cur, timestamp: str, video_source: str, video_second: int) -> int:
+def insert_violation(cur, timestamp: str, input_source: str, violation_time: str) -> int:
     """Insert a new violation row with a placeholder plate value.
-    
+
     The plate is updated later once ALPR produces a result.
     Returns the auto-incremented row id.
     """
     cur.execute(
-        '''INSERT INTO violations (timestamp, video_source, video_second, license_plate, confidence)
+        '''INSERT INTO violations (timestamp, input_source, violation_time, license_plate, ALPR_confidence)
            VALUES (?, ?, ?, ?, ?)''',
-        (timestamp, video_source, video_second, "Scanning...", 0.0)
+        (timestamp, input_source, violation_time, "Scanning...", 0.0)
     )
     return cur.lastrowid
 
@@ -61,27 +61,27 @@ def insert_violation(cur, timestamp: str, video_source: str, video_second: int) 
 def update_plate(cur, db_id: int, plate_text: str, confidence: float):
     """Overwrite the plate text and confidence for an existing violation row."""
     cur.execute(
-        "UPDATE violations SET license_plate = ?, confidence = ? WHERE id = ?",
+        "UPDATE violations SET license_plate = ?, ALPR_confidence = ? WHERE vehicle_id = ?",
         (plate_text, confidence, db_id)
     )
 
 
 def finalize_unresolved(cur, db_id: int):
     """Mark a row as 'Unreadable' if the plate was never successfully read.
-    
+
     Only updates rows that are still in the 'Scanning...' state.
     """
     cur.execute(
         "UPDATE violations SET license_plate = 'Unreadable' "
-        "WHERE id = ? AND license_plate = 'Scanning...'",
+        "WHERE vehicle_id = ? AND license_plate = 'Scanning...'",
         (db_id,)
     )
 
 
-def get_violation_count(cur, video_source: str) -> int:
+def get_violation_count(cur, input_source: str) -> int:
     """Return the total number of violations recorded for a given video file."""
     cur.execute(
-        'SELECT COUNT(*) FROM violations WHERE video_source = ?',
-        (video_source,)
+        'SELECT COUNT(*) FROM violations WHERE input_source = ?',
+        (input_source,)
     )
     return cur.fetchone()[0]

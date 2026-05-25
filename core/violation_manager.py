@@ -5,7 +5,7 @@
 # Logic summary:
 #   - A vehicle must remain in an unauthorized lane CONTINUOUSLY
 #     for VIOLATION_SECONDS_THRESHOLD seconds before it is flagged.
-#   - If it exits before the timer completes, the counter resets
+#   - If it exits before the timer completes, the entry time resets
 #     (forgiveness logic — mirrors real EDS camera behavior).
 #   - Once flagged, the vehicle stays in "violation" state for the
 #     rest of the video session.
@@ -16,61 +16,59 @@
 #   "violation" → threshold exceeded, logged to DB
 # ─────────────────────────────────────────────────────────────
 
+import time
+
 
 class ViolationManager:
-    """Tracks per-vehicle violation state and pending frame counts.
-    
+    """Tracks per-vehicle violation state using real-time elapsed seconds.
+
     Args:
-        fps (float): Frames per second of the source video, used to
-                     convert the seconds threshold into a frame count.
         threshold_seconds (float): How long a vehicle must stay in an
                                    unauthorized lane to trigger a violation.
     """
 
-    def __init__(self, fps: float, threshold_seconds: float):
-        # Convert time threshold to a frame count once at startup
-        self.threshold_frames = int(fps * threshold_seconds)
+    def __init__(self, threshold_seconds: float):
+        self.threshold_seconds = threshold_seconds
 
-        # Per track_id: how many consecutive frames in unauthorized lane
-        self._pending: dict[int, int] = {}
+        # Per track_id: wall-clock time when vehicle first entered unauthorized lane
+        self._entry_time: dict[int, float] = {}
 
         # Set of track_ids that have already been fully flagged as violations
         self._violated: set[int] = set()
 
     def update(self, track_id: int, in_unauthorized: bool) -> str:
         """Update the violation state for a single vehicle this frame.
-        
+
         Returns:
             "safe"      — vehicle is compliant
             "warning"   — vehicle is in unauthorized lane, timer running
             "violation" — vehicle exceeded threshold (first time or already logged)
         """
-        # Once a vehicle has been flagged it stays flagged for the session
         if track_id in self._violated:
             return "violation"
 
         if in_unauthorized:
-            # Increment the consecutive-frame counter
-            self._pending[track_id] = self._pending.get(track_id, 0) + 1
+            if track_id not in self._entry_time:
+                self._entry_time[track_id] = time.time()
 
-            if self._pending[track_id] >= self.threshold_frames:
-                # Threshold crossed — promote to full violation
+            elapsed = time.time() - self._entry_time[track_id]
+            if elapsed >= self.threshold_seconds:
                 self._violated.add(track_id)
                 return "violation"
 
             return "warning"
         else:
-            # Vehicle left the unauthorized zone — forgive and reset counter
-            self._pending[track_id] = 0
+            self._entry_time.pop(track_id, None)
             return "safe"
-
-    def is_new_violation(self, track_id: int) -> bool:
-        """True only on the exact frame the violation threshold was first crossed."""
-        return (
-            track_id in self._violated
-            and self._pending.get(track_id, 0) == self.threshold_frames
-        )
 
     def already_violated(self, track_id: int) -> bool:
         """True if this vehicle has already been recorded as a violator."""
         return track_id in self._violated
+
+    def transfer_state(self, old_id: int, new_id: int) -> None:
+        """Eski track_id'nin giriş zamanını ve violation bayrağını yeni ID'ye taşır."""
+        if old_id in self._entry_time:
+            self._entry_time[new_id] = self._entry_time.pop(old_id)
+        if old_id in self._violated:
+            self._violated.discard(old_id)
+            self._violated.add(new_id)

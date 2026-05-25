@@ -653,10 +653,10 @@
 
                     tr.innerHTML = `
                     <td style="font-family:monospace; font-size:11px; color:#8b949e;">${row.timestamp}</td>
-                    <td>${row.video_source}</td>
-                    <td><span class="second-badge">${row.video_second}s</span></td>
+                    <td>${row.input_source}</td>
+                    <td><span class="second-badge">${row.violation_time}</span></td>
                     <td><span class="plate-badge ${badgeClass}">${row.license_plate}</span></td>
-                    <td style="text-align:right" class="confidence-text">${(row.confidence * 100).toFixed(1)}%</td>
+                    <td style="text-align:right" class="confidence-text">${(row.ALPR_confidence * 100).toFixed(1)}%</td>
                 `;
                     tbody.appendChild(tr);
                 });

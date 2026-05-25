@@ -106,7 +106,7 @@ async def get_recent_violations():
         return []
 
     cur = conn.cursor()
-    cur.execute("SELECT * FROM violations ORDER BY id DESC LIMIT 50")
+    cur.execute("SELECT * FROM violations ORDER BY vehicle_id DESC LIMIT 50")
     rows = cur.fetchall()
     conn.close()
 
