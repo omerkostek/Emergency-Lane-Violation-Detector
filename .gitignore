@@ -1,10 +1,11 @@
 # Exclude specific folders requested by user
 input_videos/
-.report_files/
 run_commands.txt
 database/
 test_results/
 train_results/
+fps_logs/
+fps_logs_v2/
 
 # Common Python ignores
 __pycache__/

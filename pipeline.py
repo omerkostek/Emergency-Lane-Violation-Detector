@@ -10,10 +10,12 @@
 # ─────────────────────────────────────────────────────────────
 
 import os
+import csv
 import queue
 import time
 import datetime
 from collections import defaultdict
+from pathlib import Path
 
 import cv2
 from ultralytics import YOLO
@@ -35,6 +37,11 @@ from core.database import (
     get_violation_count,
 )
 from core.state import WebState
+
+PROFILE_MODE = True  # Set to True to enable per-frame profiling logs
+PROFILE_LOG_PATH        = Path("fps_logs_v2/fps_profile.csv")
+PROFILE_WARMUP_SECONDS  = 10   # tracking başladıktan sonra atlanacak süre
+PROFILE_DURATION_SECONDS = 60  # gerçek ölçüm süresi
 
 
 # ── Calibration ───────────────────────────────────────────────
@@ -185,12 +192,22 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
     DEDUP_WINDOW  = 10.0  # saniye — tekrar kayıt engellenecek süre
     web_state.state = "tracking"
 
+    if PROFILE_MODE:
+        PROFILE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        profile_log = open(PROFILE_LOG_PATH, "w", newline="")
+        profile_writer = csv.writer(profile_log)
+        profile_writer.writerow(["frame_idx", "wall_time_sec", "t_total_ms", "instantaneous_fps"])
+        pipeline_start_time = time.perf_counter()
+
     # ── Main tracking loop ────────────────────────────────────
     while cap.isOpened():
         while web_state.pause_event.is_set() and not web_state.stop_event.is_set():
             time.sleep(0.1)
         if web_state.stop_event.is_set():
             break
+
+        if PROFILE_MODE:
+            t_frame_start = time.perf_counter()
 
         ret, frame = cap.read()
         if not ret:
@@ -301,7 +318,7 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
                     plate_info is not None
                     and plate_info['confidence'] >= PLATE_LOCKED_THRESHOLD
                 )
-                if not is_locked and (frame_count - last_queued_frame[track_id] >= 5):
+                if not is_locked and (frame_count - last_queued_frame[track_id] >= 10): #10 frame aralığıyla ALPR denemesi
                     last_queued_frame[track_id] = frame_count
                     if not crop_queue.full():
                         y1_c = max(0, y1); y2_c = min(frame.shape[0], y2)
@@ -344,11 +361,30 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
         web_state.push_frame(annotated_frame)
         web_state.fps = current_fps
         web_state.frame_count = frame_count
+
+        if PROFILE_MODE:
+            wall_time = time.perf_counter() - pipeline_start_time
+            if wall_time >= PROFILE_WARMUP_SECONDS:
+                t_total = (time.perf_counter() - t_frame_start) * 1000
+                inst_fps = 1000.0 / t_total if t_total > 0 else 0
+                profile_writer.writerow([
+                    frame_count, f"{wall_time:.3f}",
+                    f"{t_total:.2f}", f"{inst_fps:.2f}"
+                ])
+                profile_log.flush()
+            if wall_time >= PROFILE_WARMUP_SECONDS + PROFILE_DURATION_SECONDS:
+                print(f"Profile duration reached ({PROFILE_DURATION_SECONDS}s). Stopping.")
+                break
+
         if web_state.stop_event.is_set():
             print("Web client stopped the stream.")
             break
 
     # ── Cleanup ───────────────────────────────────────────────
+    if PROFILE_MODE:
+        profile_log.close()
+        print(f"Profile log saved to: {PROFILE_LOG_PATH}")
+
     crop_queue.put((None, None))
     cap.release()
 
