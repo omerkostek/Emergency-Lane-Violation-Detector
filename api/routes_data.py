@@ -1,9 +1,8 @@
-# api/routes_data.py
-# ─────────────────────────────────────────────────────────────
+# 
 # Read-only data endpoints: pipeline status, video list,
 # statistics, and recent violations from the database.
 # These routes never mutate the pipeline or the database.
-# ─────────────────────────────────────────────────────────────
+# 
 
 import os
 import sqlite3
@@ -17,9 +16,7 @@ from api.routes_pipeline import get_web_state
 
 router = APIRouter()
 
-
-# ── Database helper (read-only copy, dashboard-side) ─────────
-
+# Database helper (read-only copy, dashboard-side)
 def _get_db():
     """Open a read-only connection to the violations database.
     Returns None if the database file doesn't exist yet."""
@@ -29,9 +26,7 @@ def _get_db():
     conn.row_factory = sqlite3.Row   # Row objects behave like dicts
     return conn
 
-
-# ── Pipeline status ───────────────────────────────────────────
-
+# Pipeline status
 @router.get("/api/status")
 async def get_status():
     """Return the current pipeline lifecycle state and runtime metrics.
@@ -56,9 +51,7 @@ async def get_status():
         "frame_count": ws.frame_count,
     }
 
-
-# ── Video list ────────────────────────────────────────────────
-
+# Video list
 @router.get("/api/videos")
 async def list_videos():
     """Return sorted list of .mp4 filenames available in the input directory."""
@@ -67,9 +60,7 @@ async def list_videos():
     files = sorted(f for f in os.listdir(INPUT_DIR) if f.lower().endswith('.mp4'))
     return files
 
-
-# ── Statistics ────────────────────────────────────────────────
-
+# Statistics
 @router.get("/api/stats")
 async def get_statistics():
     """Aggregate counts: total violations, readable plates, unreadable plates."""
@@ -95,9 +86,7 @@ async def get_statistics():
         "ghost_vehicles": total - readable,
     }
 
-
-# ── Violations list ───────────────────────────────────────────
-
+# Violations list
 @router.get("/api/violations")
 async def get_recent_violations():
     """Return the 50 most recent violation records, newest first."""
@@ -112,14 +101,11 @@ async def get_recent_violations():
 
     return [dict(row) for row in rows]
 
-
-# ── MJPEG video stream ────────────────────────────────────────
-
+# MJPEG video stream
 def _generate_mjpeg():
-    """Generator that yields MJPEG multipart frames from the pipeline buffer.
+    """Generator that yields MJPEG (Motion JPEG) multipart frames from the pipeline buffer.
     
-    Runs at ~30 fps (0.033 s sleep). Stops automatically when the
-    pipeline reaches the 'done' state.
+    Stops automatically when the pipeline reaches the 'done' state.
     """
     while True:
         ws = get_web_state()
@@ -147,11 +133,10 @@ def _generate_mjpeg():
 
         time.sleep(0.033)
 
-
 @router.get("/video_feed")
 async def video_feed():
     """MJPEG streaming endpoint consumed by the <img> tag in index.html."""
     return StreamingResponse(
         _generate_mjpeg(),
-        media_type="multipart/x-mixed-replace; boundary=frame"
+        media_type="multipart/x-mixed-replace; boundary=frame"  #format for MJPEG streams
     )

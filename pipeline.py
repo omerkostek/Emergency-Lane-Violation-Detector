@@ -1,5 +1,4 @@
-# pipeline.py
-# ─────────────────────────────────────────────────────────────
+# 
 # Orchestrator for the full video processing pipeline.
 # This module only coordinates the phases; business logic
 # lives in the core/ sub-modules.
@@ -7,7 +6,7 @@
 # Pipeline phases:
 #   Phase 1+2 — AI lane detection + user confirmation (calibration)
 #   Phase 3   — Vehicle tracking + ALPR + violation detection
-# ─────────────────────────────────────────────────────────────
+# 
 
 import os
 import csv
@@ -38,18 +37,17 @@ from core.database import (
 )
 from core.state import WebState
 
-PROFILE_MODE = True  # Set to True to enable per-frame profiling logs
-PROFILE_LOG_PATH        = Path("fps_logs_v2/fps_profile.csv")
-PROFILE_WARMUP_SECONDS  = 10   # tracking başladıktan sonra atlanacak süre
-PROFILE_DURATION_SECONDS = 60  # gerçek ölçüm süresi
+PROFILE_MODE = False  # Set to True to record per-frame timing data to CSV
+PROFILE_LOG_PATH         = Path("fps_logs_v2/fps_profile.csv")
+PROFILE_WARMUP_SECONDS   = 10   # Frames during this window are skipped (model warm-up)
+PROFILE_DURATION_SECONDS = 60   # How long to measure after the warm-up period
 
-
-# ── Calibration ───────────────────────────────────────────────
+# Calibration
 
 def _calibration_web(cap, web_state: WebState):
     """Phase 1+2: detect lanes frame by frame until user confirms.
 
-    Jumps 30 frames at a time when the user clicks 'Next Frame'.
+    Jumps 10 frames at a time when the user clicks 'Next Frame'.
     Returns (normal_polys, unauthorized_polys) or None on abort.
     """
     frame_count = 0
@@ -57,7 +55,7 @@ def _calibration_web(cap, web_state: WebState):
 
     while not web_state.confirm_event.is_set():
         if frame_count > 0:
-            for _ in range(29):
+            for _ in range(9):
                 cap.read()
                 frame_count += 1
 
@@ -92,19 +90,7 @@ def _calibration_web(cap, web_state: WebState):
     return None
 
 
-# ── IoU helper ────────────────────────────────────────────────
-
-def _iou(b1, b2) -> float:
-    xi1, yi1 = max(b1[0], b2[0]), max(b1[1], b2[1])
-    xi2, yi2 = min(b1[2], b2[2]), min(b1[3], b2[3])
-    inter = max(0, xi2 - xi1) * max(0, yi2 - yi1)
-    a1 = (b1[2] - b1[0]) * (b1[3] - b1[1])
-    a2 = (b2[2] - b2[0]) * (b2[3] - b2[1])
-    union = a1 + a2 - inter
-    return inter / union if union > 0 else 0.0
-
-
-# ── HUD drawing ───────────────────────────────────────────────
+# HUD drawing
 
 def _draw_vehicle_hud(frame, x1, y1, x2, y2, track_id, box_color,
                        status_text, status_color, plate_info,
@@ -133,7 +119,7 @@ def _draw_vehicle_hud(frame, x1, y1, x2, y2, track_id, box_color,
         cv2.putText(frame, status_text, (x1 + 4, y2 - 22), font, 0.6, status_color, 2)
 
 
-# ── Main entry point ──────────────────────────────────────────
+# Main entry point
 
 def process_video_stream(video_source: str, use_turkish_logic: bool,
                          web_state: WebState):
@@ -146,7 +132,7 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
         print("Error: Could not open video.")
         return
 
-    # ── Phase 1+2: Lane calibration ───────────────────────────
+    # Phase 1+2: Lane calibration
     print("--- PHASE 1: AI LANE DETECTION ---")
 
     result = _calibration_web(cap, web_state)
@@ -155,7 +141,7 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
 
     normal_polys, unauthorized_polys = result
 
-    # ── Phase 3: Vehicle tracking + ALPR + violations ─────────
+    # Phase 3: Vehicle tracking + ALPR + violations
     print("--- PHASE 3: STARTING LIVE TRACKING ---")
 
     conn, cur = init_db()
@@ -164,7 +150,12 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     frame_count = 0
 
+    # Queue that feeds vehicle crops to the background ALPR thread.
+    # maxsize=100 prevents memory buildup if ALPR falls behind.
     crop_queue = queue.Queue(maxsize=100)
+
+    # Shared dict written by the ALPR thread, read by the pipeline thread.
+    # Structure — key: track_id (int), value: {text, confidence, time_updated, norm_box}
     best_plates: dict = {}
 
     alpr_worker = PlateRecognitionWorker(crop_queue, best_plates, use_turkish_logic)
@@ -181,15 +172,6 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
 
     violation_mgr = ViolationManager(VIOLATION_SECONDS_THRESHOLD)
 
-    last_seen_boxes: dict[int, tuple] = {}
-    lost_at_frame:   dict[int, int]   = {}
-    prev_track_ids:  set[int]         = set()
-    REIDENTIFY_WINDOW = int(video_fps * 4)
-    REIDENTIFY_IOU    = 0.25
-
-    recent_violations: list[dict] = []  # [{db_row_id, cx, cy, timestamp}, ...]
-    DEDUP_RADIUS  = 150   # piksel — aynı araç sayılacak maksimum mesafe
-    DEDUP_WINDOW  = 10.0  # saniye — tekrar kayıt engellenecek süre
     web_state.state = "tracking"
 
     if PROFILE_MODE:
@@ -199,7 +181,7 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
         profile_writer.writerow(["frame_idx", "wall_time_sec", "t_total_ms", "instantaneous_fps"])
         pipeline_start_time = time.perf_counter()
 
-    # ── Main tracking loop ────────────────────────────────────
+    # Main tracking loop
     while cap.isOpened():
         while web_state.pause_event.is_set() and not web_state.stop_event.is_set():
             time.sleep(0.1)
@@ -224,48 +206,32 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
             classes=VEHICLE_CLASSES, verbose=False
         )
 
+        # ByteTrack only assigns IDs when it has tracks; skip frames with no detections.
         if results and results[0].boxes and results[0].boxes.id is not None:
             boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
             track_ids = results[0].boxes.id.cpu().numpy().astype(int)
-            current_track_ids = set(track_ids.tolist())
-
-            for lost_id in prev_track_ids - current_track_ids:
-                lost_at_frame[lost_id] = frame_count
-
-            for new_id in current_track_ids - prev_track_ids:
-                new_box = next(b for b, tid in zip(boxes, track_ids) if tid == new_id)
-                best_old_id, best_iou = None, 0.0
-                for old_id, lost_frame in list(lost_at_frame.items()):
-                    if frame_count - lost_frame > REIDENTIFY_WINDOW:
-                        continue
-                    if old_id not in last_seen_boxes:
-                        continue
-                    iou = _iou(new_box, last_seen_boxes[old_id])
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_old_id = old_id
-                if best_old_id is not None and best_iou >= REIDENTIFY_IOU:
-                    violation_mgr.transfer_state(best_old_id, new_id)
-                    for d in (best_plates, attempt_counts, last_queued_frame, violation_dict):
-                        if best_old_id in d:
-                            d[new_id] = d[best_old_id]
-                            del d[best_old_id]
-                    del lost_at_frame[best_old_id]
 
             for box, track_id in zip(boxes, track_ids):
                 x1, y1, x2, y2 = box
-                cy = float(y2)
-                sample_xs = [x1 + (x2 - x1) * i / 9 for i in range(10)]
+
+                # Lane violation test
+                # Use the bottom-center point as the vehicle's road contact point.
+                # cv2.pointPolygonTest returns ≥ 0 if the point is inside the polygon.
+                cx_mid = float((x1 + x2) / 2)
+                cy_bot = float(y2)
                 in_unauthorized = any(
-                    sum(
-                        cv2.pointPolygonTest(poly, (float(sx), cy), False) >= 0
-                        for sx in sample_xs
-                    ) / len(sample_xs) >= 0.4
+                    cv2.pointPolygonTest(poly, (cx_mid, cy_bot), False) >= 0
                     for poly in unauthorized_polys
                 )
 
+                # Violation state machine
+                # Returns "safe" / "warning" / "violation" based on elapsed time.
                 status = violation_mgr.update(track_id, in_unauthorized)
 
+                # Write violation to database (once per track_id)
+                # Insert immediately when the vehicle first crosses the threshold.
+                # Plate column starts as "Scanning..." and is updated by the ALPR
+                # thread (or via the per-frame update block below).
                 if (status == "violation"
                         and track_id not in violation_dict
                         and violation_mgr.already_violated(track_id)):
@@ -273,31 +239,12 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
                     vsec = int(frame_count / video_fps)
                     vtime = f"{vsec // 60}:{vsec % 60:02d}"
                     src_name = os.path.basename(video_source)
-                    cx = (x1 + x2) // 2
-                    cy = (y1 + y2) // 2
-                    now = time.time()
 
-                    # Yakın konumda zaten kayıtlı bir ihlal var mı kontrol et
-                    dup_db_id = None
-                    for rv in recent_violations:
-                        if now - rv["timestamp"] > DEDUP_WINDOW:
-                            continue
-                        dist = ((cx - rv["cx"]) ** 2 + (cy - rv["cy"]) ** 2) ** 0.5
-                        if dist < DEDUP_RADIUS:
-                            dup_db_id = rv["db_row_id"]
-                            break
-
-                    if dup_db_id is not None:
-                        db_id = dup_db_id  # Yeni satır açma, mevcut kaydı devral
-                    else:
-                        db_id = insert_violation(cur, ts, src_name, vtime)
-                        existing_plate = best_plates.get(track_id)
-                        if existing_plate:
-                            update_plate(cur, db_id, existing_plate['text'], existing_plate['confidence'])
-                        conn.commit()
-                        recent_violations.append({
-                            "db_row_id": db_id, "cx": cx, "cy": cy, "timestamp": now
-                        })
+                    db_id = insert_violation(cur, ts, src_name, vtime)
+                    existing_plate = best_plates.get(track_id)
+                    if existing_plate:
+                        update_plate(cur, db_id, existing_plate['text'], existing_plate['confidence'])
+                    conn.commit()
 
                     violation_dict[track_id] = {
                         "db_row_id": db_id,
@@ -306,21 +253,26 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
                         "video_second": vsec,
                     }
 
-                if status == "violation":
+                # HUD color logic
+                if status == "violation":   #RED
                     box_color, status_text, status_color = (0, 0, 255), "VIOLATION!", (0, 0, 255)
-                elif status == "warning":
-                    box_color, status_text, status_color = (0, 165, 255), "WARNING", (0, 165, 255)
-                else:
+                elif status == "warning":   #ORANGE
+                    box_color, status_text, status_color = (0, 165, 255), "WARNING!", (0, 165, 255)
+                else:   #GREEN
                     box_color, status_text, status_color = (0, 255, 0), None, None
 
+                # ALPR crop queuing
+                # Send a vehicle crop to the background ALPR thread every 10 frames.
+                # Stop sending once the plate is locked (confidence above threshold).
                 plate_info = best_plates.get(track_id)
                 is_locked = (
                     plate_info is not None
                     and plate_info['confidence'] >= PLATE_LOCKED_THRESHOLD
                 )
-                if not is_locked and (frame_count - last_queued_frame[track_id] >= 10): #10 frame aralığıyla ALPR denemesi
+                if not is_locked and (frame_count - last_queued_frame[track_id] >= 10):
                     last_queued_frame[track_id] = frame_count
                     if not crop_queue.full():
+                        # Clamp coordinates to frame boundaries before cropping
                         y1_c = max(0, y1); y2_c = min(frame.shape[0], y2)
                         x1_c = max(0, x1); x2_c = min(frame.shape[1], x2)
                         crop = frame[y1_c:y2_c, x1_c:x2_c].copy()
@@ -334,14 +286,10 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
                     plate_info, use_turkish_logic, attempt_counts[track_id]
                 )
 
-                last_seen_boxes[track_id] = (x1, y1, x2, y2)
 
-            prev_track_ids = current_track_ids
-        else:
-            for lost_id in prev_track_ids:
-                lost_at_frame[lost_id] = frame_count
-            prev_track_ids = set()
-
+        # Every frame: refresh plate text for all recorded violators.
+        # The ALPR thread may have found a higher-confidence result since
+        # the violation was first written, so we overwrite with the latest best.
         for t_id, v_data in violation_dict.items():
             db_id = v_data.get("db_row_id")
             if db_id is not None:
@@ -350,6 +298,8 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
                     update_plate(cur, db_id, p_info['text'], p_info['confidence'])
         conn.commit()
 
+        # FPS overlay + web frame push
+        # Average FPS since pipeline start; displayed in the top-left corner.
         elapsed = time.time() - start_time
         current_fps = frame_count / elapsed if elapsed > 0 else 0
         cv2.rectangle(annotated_frame, (10, 10), (260, 80), (0, 0, 0), -1)
@@ -358,10 +308,14 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
         cv2.putText(annotated_frame, f"Frame: {frame_count}", (20, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
+        # Encode to JPEG and put in the shared buffer for the MJPEG endpoint.
         web_state.push_frame(annotated_frame)
         web_state.fps = current_fps
         web_state.frame_count = frame_count
 
+        # Per-frame profiling
+        # Measures total wall time per frame (ms) and instantaneous FPS.
+        # Results are flushed immediately so partial CSVs are readable on crash.
         if PROFILE_MODE:
             wall_time = time.perf_counter() - pipeline_start_time
             if wall_time >= PROFILE_WARMUP_SECONDS:
@@ -380,7 +334,7 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
             print("Web client stopped the stream.")
             break
 
-    # ── Cleanup ───────────────────────────────────────────────
+    # Cleanup
     if PROFILE_MODE:
         profile_log.close()
         print(f"Profile log saved to: {PROFILE_LOG_PATH}")
@@ -388,6 +342,7 @@ def process_video_stream(video_source: str, use_turkish_logic: bool,
     crop_queue.put((None, None))
     cap.release()
 
+    # Finalize any unresolved violations in the database by marking them as "Ghost Vehicle"
     for t_id, v_data in violation_dict.items():
         db_id = v_data.get("db_row_id")
         if db_id is not None:

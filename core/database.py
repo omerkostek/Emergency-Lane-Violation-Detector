@@ -1,5 +1,4 @@
-# core/database.py
-# ─────────────────────────────────────────────────────────────
+# 
 # All SQLite interactions live here.
 # Raw SQL is hidden behind clean function signatures so the
 # pipeline code never has to think about cursor management.
@@ -10,14 +9,14 @@
 #   update_plate()         → updates plate text & confidence for a row
 #   finalize_unresolved()  → marks still-scanning rows as "Unreadable"
 #   get_violation_count()  → returns total violations for a video
-# ─────────────────────────────────────────────────────────────
+# 
 
 import os
 import sqlite3
 
 from core.config import DB_DIR, DB_PATH
 
-# SQL to create the violations table if it doesn't already exist
+# Create the violations table if it doesn't already exist
 _CREATE_TABLE_SQL = '''
     CREATE TABLE IF NOT EXISTS violations (
         vehicle_id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +27,6 @@ _CREATE_TABLE_SQL = '''
         ALPR_confidence REAL
     )
 '''
-
 
 def init_db():
     """Open (or create) the violations database and ensure the schema exists.
@@ -43,7 +41,6 @@ def init_db():
     conn.commit()
     return conn, cur
 
-
 def insert_violation(cur, timestamp: str, input_source: str, violation_time: str) -> int:
     """Insert a new violation row with a placeholder plate value.
 
@@ -57,14 +54,12 @@ def insert_violation(cur, timestamp: str, input_source: str, violation_time: str
     )
     return cur.lastrowid
 
-
 def update_plate(cur, db_id: int, plate_text: str, confidence: float):
     """Overwrite the plate text and confidence for an existing violation row."""
     cur.execute(
         "UPDATE violations SET license_plate = ?, ALPR_confidence = ? WHERE vehicle_id = ?",
         (plate_text, confidence, db_id)
     )
-
 
 def finalize_unresolved(cur, db_id: int):
     """Mark a row as 'Unreadable' if the plate was never successfully read.
@@ -76,7 +71,6 @@ def finalize_unresolved(cur, db_id: int):
         "WHERE vehicle_id = ? AND license_plate = 'Scanning...'",
         (db_id,)
     )
-
 
 def get_violation_count(cur, input_source: str) -> int:
     """Return the total number of violations recorded for a given video file."""

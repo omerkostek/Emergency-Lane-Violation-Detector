@@ -1,12 +1,11 @@
-# core/violation_manager.py
-# ─────────────────────────────────────────────────────────────
+# 
 # Encapsulates the violation state machine for each tracked vehicle.
 #
 # Logic summary:
 #   - A vehicle must remain in an unauthorized lane CONTINUOUSLY
 #     for VIOLATION_SECONDS_THRESHOLD seconds before it is flagged.
 #   - If it exits before the timer completes, the entry time resets
-#     (forgiveness logic — mirrors real EDS camera behavior).
+#     (forgiveness logic).
 #   - Once flagged, the vehicle stays in "violation" state for the
 #     rest of the video session.
 #
@@ -14,10 +13,9 @@
 #   "safe"      → vehicle is in a normal lane
 #   "warning"   → vehicle entered unauthorized lane, timer running
 #   "violation" → threshold exceeded, logged to DB
-# ─────────────────────────────────────────────────────────────
+# 
 
 import time
-
 
 class ViolationManager:
     """Tracks per-vehicle violation state using real-time elapsed seconds.
@@ -64,11 +62,3 @@ class ViolationManager:
     def already_violated(self, track_id: int) -> bool:
         """True if this vehicle has already been recorded as a violator."""
         return track_id in self._violated
-
-    def transfer_state(self, old_id: int, new_id: int) -> None:
-        """Eski track_id'nin giriş zamanını ve violation bayrağını yeni ID'ye taşır."""
-        if old_id in self._entry_time:
-            self._entry_time[new_id] = self._entry_time.pop(old_id)
-        if old_id in self._violated:
-            self._violated.discard(old_id)
-            self._violated.add(new_id)

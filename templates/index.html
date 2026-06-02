@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALPR Control Center</title>
+    <title>Violation Control Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -58,7 +58,8 @@
             border: 1px solid #30363d;
         }
 
-        .status-dot {
+        /* Colored dot that reflects the current pipeline state */
+        .status-indicator {
             width: 8px;
             height: 8px;
             border-radius: 50%;
@@ -66,12 +67,12 @@
             transition: background 0.3s;
         }
 
-        .status-dot.active {
+        .status-indicator.active {
             background: #3fb950;
             box-shadow: 0 0 8px #3fb95066;
         }
 
-        .status-dot.calibrating {
+        .status-indicator.calibrating {
             background: #d29922;
             box-shadow: 0 0 8px #d2992266;
         }
@@ -189,7 +190,8 @@
             cursor: crosshair;
         }
 
-        .video-placeholder {
+        /* Shown before a video is started */
+        .empty-msg {
             color: #484f58;
             font-size: 14px;
             text-transform: uppercase;
@@ -197,7 +199,8 @@
             font-weight: 600;
         }
 
-        .calibration-hint {
+        /* Overlay bar shown during calibration phase */
+        .cal-overlay {
             position: absolute;
             bottom: 12px;
             left: 50%;
@@ -212,11 +215,11 @@
             display: none;
         }
 
-        .calibration-hint.visible {
+        .cal-overlay.visible {
             display: block;
         }
 
-        .calibration-hint kbd {
+        .cal-overlay kbd {
             background: #21262d;
             border: 1px solid #484f58;
             border-radius: 4px;
@@ -235,7 +238,7 @@
             overflow-y: auto;
         }
 
-        .panel-title {
+        .section-title {
             padding: 14px 16px;
             font-size: 13px;
             font-weight: 700;
@@ -247,7 +250,8 @@
             flex-shrink: 0;
         }
 
-        .stats-grid {
+        /* 3-column grid for the summary metric cards */
+        .metrics-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 10px;
@@ -255,7 +259,7 @@
             flex-shrink: 0;
         }
 
-        .stat-card {
+        .metric-card {
             background: #161b22;
             border: 1px solid #21262d;
             border-radius: 10px;
@@ -264,11 +268,11 @@
             transition: border-color 0.3s;
         }
 
-        .stat-card:hover {
+        .metric-card:hover {
             border-color: #30363d;
         }
 
-        .stat-card .label {
+        .metric-card .label {
             font-size: 9px;
             font-weight: 700;
             text-transform: uppercase;
@@ -277,31 +281,31 @@
             margin-bottom: 6px;
         }
 
-        .stat-card .value {
+        .metric-card .value {
             font-size: 28px;
             font-weight: 800;
         }
 
-        .stat-card .value.total {
+        .metric-card .value.total {
             color: #e6edf3;
         }
 
-        .stat-card .value.readable {
+        .metric-card .value.readable {
             color: #3fb950;
         }
 
-        .stat-card .value.ghost {
+        .metric-card .value.ghost {
             color: #f85149;
         }
 
-        /* ---- Table ---- */
-        .table-wrapper {
+        /* ---- Violations Table ---- */
+        .records-wrapper {
             flex: 1;
             overflow-y: auto;
             padding: 0 16px 16px;
         }
 
-        .table-header-row {
+        .records-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -309,7 +313,7 @@
             flex-shrink: 0;
         }
 
-        .table-header-row span {
+        .records-header span {
             font-size: 10px;
             color: #484f58;
             font-family: monospace;
@@ -350,7 +354,8 @@
             color: #c9d1d9;
         }
 
-        .plate-badge {
+        /* Colored badge showing OCR plate reading status */
+        .plate-tag {
             display: inline-block;
             padding: 3px 8px;
             border-radius: 4px;
@@ -360,25 +365,26 @@
             letter-spacing: 0.8px;
         }
 
-        .plate-badge.readable {
+        .plate-tag.readable {
             background: #0d2818;
             color: #3fb950;
             border: 1px solid #23863640;
         }
 
-        .plate-badge.unreadable {
+        .plate-tag.unreadable {
             background: #2d0a0e;
             color: #f85149;
             border: 1px solid #da363340;
         }
 
-        .plate-badge.scanning {
+        .plate-tag.scanning {
             background: #1c1c00;
             color: #d29922;
             border: 1px solid #d2992240;
         }
 
-        .second-badge {
+        /* Badge showing the video timestamp of the violation */
+        .time-tag {
             background: #21262d;
             border: 1px solid #30363d;
             padding: 2px 6px;
@@ -388,7 +394,7 @@
             color: #8b949e;
         }
 
-        .confidence-text {
+        .conf-text {
             font-family: monospace;
             font-size: 11px;
             color: #8b949e;
@@ -400,10 +406,10 @@
 
     <!-- Header -->
     <div class="header">
-        <h1>Violation Control Center</h1>
+        <h1>Emergency Lane Violation Control Center</h1>
         <div class="status-badge">
-            <div class="status-dot" id="status-dot"></div>
-            <span id="status-text">IDLE</span>
+            <div class="status-indicator" id="status-indicator"></div>
+            <span id="status-label">IDLE</span>
         </div>
     </div>
 
@@ -422,10 +428,10 @@
             </div>
 
             <div class="video-container" id="video-container">
-                <span class="video-placeholder" id="video-placeholder">Select a video and press Start</span>
-                <img id="video-feed" src="" style="display:none;" alt="Video Feed">
-                <div class="calibration-hint" id="cal-hint">
-                    <span id="cal-hint-text">Detecting lanes with AI model...</span>
+                <span class="empty-msg" id="empty-msg">Select a video and press Start</span>
+                <img id="video-stream" src="" style="display:none;" alt="Video Feed">
+                <div class="cal-overlay" id="cal-overlay">
+                    <span id="cal-status-msg">Detecting lanes with AI model...</span>
                     <button id="btn-next-frame" style="display:none; margin-left:16px; padding:8px 20px;
                         background:linear-gradient(135deg,#30363d,#484f58); border:1px solid #8b949e; border-radius:6px;
                         color:#fff; font-weight:700; font-size:13px; cursor:pointer; font-family:Inter,sans-serif;"
@@ -440,29 +446,29 @@
 
         <!-- Right Panel: Dashboard -->
         <div class="right-panel">
-            <div class="panel-title">Analytics Dashboard</div>
+            <div class="section-title">Analytics Dashboard</div>
 
-            <div class="stats-grid">
-                <div class="stat-card">
+            <div class="metrics-grid">
+                <div class="metric-card">
                     <div class="label">Total Violations</div>
-                    <div class="value total" id="stat-total">0</div>
+                    <div class="value total" id="count-total">0</div>
                 </div>
-                <div class="stat-card">
+                <div class="metric-card">
                     <div class="label">Readable Plates</div>
-                    <div class="value readable" id="stat-readable">0</div>
+                    <div class="value readable" id="count-readable">0</div>
                 </div>
-                <div class="stat-card">
+                <div class="metric-card">
                     <div class="label">Unreadable Plates</div>
-                    <div class="value ghost" id="stat-ghost">0</div>
+                    <div class="value ghost" id="count-unreadable">0</div>
                 </div>
             </div>
 
-            <div class="table-header-row">
-                <div class="panel-title" style="border:none; padding:0; background:none;">Recent Violations</div>
+            <div class="records-header">
+                <div class="section-title" style="border:none; padding:0; background:none;">Recent Violations</div>
                 <span>Auto-refresh 3s</span>
             </div>
 
-            <div class="table-wrapper">
+            <div class="records-wrapper">
                 <table>
                     <thead>
                         <tr>
@@ -473,7 +479,7 @@
                             <th style="text-align:right">Confidence</th>
                         </tr>
                     </thead>
-                    <tbody id="table-body">
+                    <tbody id="violations-list">
                         <tr>
                             <td colspan="5" style="text-align:center; color:#484f58; padding:30px;">No records yet</td>
                         </tr>
@@ -484,15 +490,19 @@
     </div>
 
     <script>
-        const videoFeed = document.getElementById('video-feed');
-        const placeholder = document.getElementById('video-placeholder');
-        const calHint = document.getElementById('cal-hint');
-        const statusDot = document.getElementById('status-dot');
-        const statusText = document.getElementById('status-text');
+        // DOM references
+        const videoStream     = document.getElementById('video-stream');
+        const emptyMsg        = document.getElementById('empty-msg');
+        const calOverlay      = document.getElementById('cal-overlay');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusLabel     = document.getElementById('status-label');
+
         let pipelineActive = false;
         let frameWidth = 0, frameHeight = 0;
 
-        // Load available videos
+        
+        // Video list 
+        // Fetches .mp4 filenames from the input_videos/ directory via /api/videos.
         async function loadVideos() {
             try {
                 const res = await fetch('/api/videos');
@@ -508,7 +518,12 @@
             } catch (e) { console.error('Failed to load videos:', e); }
         }
 
-        // Start pipeline
+
+        // Pipeline control
+
+        // POST /api/start — launches the pipeline background thread on the server.
+        // A 500 ms delay is added before showing the MJPEG feed to give the
+        // pipeline time to push its first frame into the buffer.
         async function startPipeline() {
             const video = document.getElementById('video-select').value;
             if (!video) return;
@@ -520,22 +535,23 @@
             });
 
             pipelineActive = true;
-            // Small delay to let the pipeline push first frame
             setTimeout(() => {
-                placeholder.style.display = 'none';
-                videoFeed.style.display = 'block';
-                videoFeed.src = '/video_feed?' + Date.now();
+                emptyMsg.style.display = 'none';
+                videoStream.style.display = 'block';
+                // Cache-bust the MJPEG src so the browser reconnects fresh.
+                videoStream.src = '/video_feed?' + Date.now();
             }, 500);
         }
 
-        // Stop pipeline
+        // POST /api/stop — sets the stop_event flag; the pipeline exits cleanly.
         async function stopPipeline() {
             await fetch('/api/stop', { method: 'POST' });
             pipelineActive = false;
             document.getElementById('btn-pause').style.display = 'none';
         }
 
-        // Pause/Resume pipeline
+        // Toggle between /api/pause and /api/resume.
+        // The pipeline loop busy-waits while pause_event is set.
         let isPaused = false;
         async function togglePause() {
             if (isPaused) {
@@ -547,7 +563,10 @@
             }
         }
 
-        // Confirm calibration
+
+        // Calibration actions
+
+        // POST /api/confirm — sets confirm_event, advances pipeline to Phase 3.
         async function confirmCalibration() {
             document.getElementById('btn-confirm').disabled = true;
             document.getElementById('btn-next-frame').disabled = true;
@@ -555,7 +574,8 @@
             await fetch('/api/confirm', { method: 'POST' });
         }
 
-        // Next frame calibration
+        // POST /api/next_frame — sets next_frame_event so the calibration loop
+        // reads 10 more frames and re-runs lane detection.
         async function nextFrameCalibration() {
             document.getElementById('btn-confirm').disabled = true;
             document.getElementById('btn-next-frame').disabled = true;
@@ -563,32 +583,38 @@
             await fetch('/api/next_frame', { method: 'POST' });
         }
 
-        // Poll status & dashboard data
+
+        // Status polling (every 1 s) 
+        // Maps backend lifecycle states to badge colors and calibration UI visibility.
+        // Pipeline states: idle → detecting → calibrating → tracking → paused → done
         async function pollStatus() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
 
-                frameWidth = data.frame_width;
+                frameWidth  = data.frame_width;
                 frameHeight = data.frame_height;
 
-                statusDot.className = 'status-dot';
-                const confirmBtn = document.getElementById('btn-confirm');
+                statusIndicator.className = 'status-indicator';
+                const confirmBtn   = document.getElementById('btn-confirm');
                 const nextFrameBtn = document.getElementById('btn-next-frame');
-                const calHintText = document.getElementById('cal-hint-text');
+                const calStatusMsg = document.getElementById('cal-status-msg');
 
                 if (data.state === 'detecting') {
-                    statusDot.classList.add('calibrating');
-                    statusText.textContent = 'DETECTING LANES';
-                    calHint.classList.add('visible');
-                    calHintText.textContent = 'AI model detecting lanes...';
+                    // YOLO segmentation model is running — no user action needed yet.
+                    statusIndicator.classList.add('calibrating');
+                    statusLabel.textContent = 'DETECTING LANES';
+                    calOverlay.classList.add('visible');
+                    calStatusMsg.textContent = 'AI model detecting lanes...';
                     confirmBtn.style.display = 'none';
                     nextFrameBtn.style.display = 'none';
+
                 } else if (data.state === 'calibrating') {
-                    statusDot.classList.add('calibrating');
-                    statusText.textContent = 'AWAITING CONFIRMATION';
-                    calHint.classList.add('visible');
-                    calHintText.textContent = 'Lane detection complete. Review the detected lanes.';
+                    // Detection finished; show the result and wait for user confirmation.
+                    statusIndicator.classList.add('calibrating');
+                    statusLabel.textContent = 'AWAITING CONFIRMATION';
+                    calOverlay.classList.add('visible');
+                    calStatusMsg.textContent = 'Lane detection complete. Review the detected lanes.';
 
                     nextFrameBtn.style.display = 'inline-block';
                     nextFrameBtn.disabled = false;
@@ -597,76 +623,89 @@
                     confirmBtn.style.display = 'inline-block';
                     confirmBtn.disabled = false;
                     confirmBtn.textContent = 'Confirm & Start Tracking';
+
                 } else if (data.state === 'tracking') {
-                    statusDot.classList.add('active');
-                    statusText.textContent = `TRACKING · ${data.fps} FPS · Frame ${data.frame_count}`;
-                    calHint.classList.remove('visible');
+                    // Vehicle tracking + ALPR + violation detection is active.
+                    statusIndicator.classList.add('active');
+                    statusLabel.textContent = `TRACKING · ${data.fps} FPS · Frame ${data.frame_count}`;
+                    calOverlay.classList.remove('visible');
 
                     const pauseBtn = document.getElementById('btn-pause');
                     pauseBtn.style.display = 'inline-block';
                     pauseBtn.textContent = '⏸ Pause';
                     isPaused = false;
+
                 } else if (data.state === 'paused') {
-                    statusDot.classList.add('calibrating');
-                    statusText.textContent = `PAUSED · Frame ${data.frame_count}`;
-                    calHint.classList.remove('visible');
+                    statusIndicator.classList.add('calibrating');
+                    statusLabel.textContent = `PAUSED · Frame ${data.frame_count}`;
+                    calOverlay.classList.remove('visible');
 
                     const pauseBtn = document.getElementById('btn-pause');
                     pauseBtn.style.display = 'inline-block';
                     pauseBtn.textContent = '▶ Resume';
                     isPaused = true;
+
                 } else if (data.state === 'done') {
-                    statusText.textContent = 'DONE';
-                    calHint.classList.remove('visible');
+                    // Video ended or Stop was pressed — final frame stays on screen.
+                    statusLabel.textContent = 'DONE';
+                    calOverlay.classList.remove('visible');
                     pipelineActive = false;
                     document.getElementById('btn-pause').style.display = 'none';
+
                 } else {
-                    statusText.textContent = 'IDLE';
-                    calHint.classList.remove('visible');
+                    // 'idle': no pipeline has been started yet.
+                    statusLabel.textContent = 'IDLE';
+                    calOverlay.classList.remove('visible');
                 }
             } catch (e) { }
         }
 
+
+        // Dashboard polling (every 3 s)
+        // Fetches aggregate stats and the 50 most recent violation rows.
+        // Badge class reflects plate reading state: scanning / readable / unreadable.
         async function pollDashboard() {
             try {
                 const statsRes = await fetch('/api/stats');
                 const stats = await statsRes.json();
-                document.getElementById('stat-total').textContent = stats.total_violations;
-                document.getElementById('stat-readable').textContent = stats.readable_plates;
-                document.getElementById('stat-ghost').textContent = stats.ghost_vehicles;
+                document.getElementById('count-total').textContent      = stats.total_violations;
+                document.getElementById('count-readable').textContent   = stats.readable_plates;
+                document.getElementById('count-unreadable').textContent = stats.ghost_vehicles;
 
                 const tableRes = await fetch('/api/violations');
                 const rows = await tableRes.json();
-                const tbody = document.getElementById('table-body');
+                const violationsList = document.getElementById('violations-list');
 
                 if (rows.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#484f58; padding:30px;">No records yet</td></tr>';
+                    violationsList.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#484f58; padding:30px;">No records yet</td></tr>';
                     return;
                 }
 
-                tbody.innerHTML = '';
+                violationsList.innerHTML = '';
                 rows.forEach(row => {
                     const tr = document.createElement('tr');
+                    // Determine badge style from the current plate value in the DB row.
                     let badgeClass = 'scanning';
-                    if (row.license_plate === 'Unreadable') badgeClass = 'unreadable';
+                    if (row.license_plate === 'Unreadable')       badgeClass = 'unreadable';
                     else if (row.license_plate !== 'Scanning...') badgeClass = 'readable';
 
                     tr.innerHTML = `
                     <td style="font-family:monospace; font-size:11px; color:#8b949e;">${row.timestamp}</td>
                     <td>${row.input_source}</td>
-                    <td><span class="second-badge">${row.violation_time}</span></td>
-                    <td><span class="plate-badge ${badgeClass}">${row.license_plate}</span></td>
-                    <td style="text-align:right" class="confidence-text">${(row.ALPR_confidence * 100).toFixed(1)}%</td>
+                    <td><span class="time-tag">${row.violation_time}</span></td>
+                    <td><span class="plate-tag ${badgeClass}">${row.license_plate}</span></td>
+                    <td style="text-align:right" class="conf-text">${(row.ALPR_confidence * 100).toFixed(1)}%</td>
                 `;
-                    tbody.appendChild(tr);
+                    violationsList.appendChild(tr);
                 });
             } catch (e) { }
         }
 
-        // Init
+
+        // ── Init ────────────────────────────────────────────────
         loadVideos();
-        setInterval(pollStatus, 1000);
-        setInterval(pollDashboard, 3000);
+        setInterval(pollStatus,    1000);  // Status badge + calibration UI
+        setInterval(pollDashboard, 3000);  // Stats cards + violations table
     </script>
 </body>
 

@@ -1,14 +1,12 @@
-# core/state.py
-# ─────────────────────────────────────────────────────────────
+# 
 # Defines WebState — the shared-memory object that the pipeline
 # background thread and the FastAPI server use to communicate.
-# Thread-safe frame updates are done via a Lock; lifecycle
-# events (stop, pause, confirm) use threading.Event flags.
-# ─────────────────────────────────────────────────────────────
+# Thread-safe frame updates are done via a Lock 
+# lifecycle events (stop, pause, confirm) use threading.Event flags.
+# 
 
 import threading
 import cv2
-
 
 class WebState:
     """Shared state between the video pipeline thread and the web server.
@@ -19,18 +17,18 @@ class WebState:
     """
 
     def __init__(self):
-        # ── Frame buffer ──────────────────────────────────────
+        # Frame buffer
         # Holds the latest JPEG-encoded frame as bytes.
         self.frame_buffer = None
         self.frame_lock = threading.Lock()
 
-        # ── Control events ────────────────────────────────────
-        self.stop_event = threading.Event()      # Signal pipeline to exit
-        self.pause_event = threading.Event()     # Freeze frame output
-        self.confirm_event = threading.Event()   # User confirmed lane calibration
-        self.next_frame_event = threading.Event()# User requested next calibration frame
+        # Control events
+        self.stop_event = threading.Event()         # Signal pipeline to exit
+        self.pause_event = threading.Event()        # Freeze frame output
+        self.confirm_event = threading.Event()      # User confirmed lane calibration
+        self.next_frame_event = threading.Event()   # User requested next calibration frame
 
-        # ── Pipeline metadata ─────────────────────────────────
+        # Pipeline metadata
         self.state = "idle"     # Current lifecycle state string
         self.frame_width = 0
         self.frame_height = 0

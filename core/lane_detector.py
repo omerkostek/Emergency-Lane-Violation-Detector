@@ -1,5 +1,4 @@
-# core/lane_detector.py
-# ─────────────────────────────────────────────────────────────
+# 
 # Runs the custom YOLO segmentation model on a single frame to
 # identify normal and unauthorized lanes.
 #
@@ -10,7 +9,7 @@
 #     NOT from bounding boxes, because the model is a segment task.
 #   - draw_lane_overlays() is a reusable helper used both in
 #     calibration frames and in the live tracking loop.
-# ─────────────────────────────────────────────────────────────
+# 
 
 import cv2
 import numpy as np
@@ -21,7 +20,6 @@ from core.config import (
     CLASS_NORMAL_LANE,
     CLASS_UNAUTHORIZED_LANE,
 )
-
 
 def detect_lanes_with_model(frame):
     """Run the custom segmentation model on one frame.
@@ -65,7 +63,6 @@ def detect_lanes_with_model(frame):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
 
     return normal_polys, unauthorized_polys, annotated
-
 
 def draw_lane_overlays(frame, normal_polys, unauthorized_polys, alpha=0.15):
     """Draw transparent colored fills and boundary lines for detected lanes.

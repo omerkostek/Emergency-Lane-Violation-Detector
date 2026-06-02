@@ -1,9 +1,8 @@
-# api/routes_pipeline.py
-# ─────────────────────────────────────────────────────────────
+# 
 # Pipeline lifecycle endpoints: start, stop, pause, resume.
 # These routes control the background video processing thread
 # via the shared WebState object.
-# ─────────────────────────────────────────────────────────────
+#
 
 import os
 import threading
@@ -16,13 +15,11 @@ from core.state import WebState
 
 router = APIRouter()
 
-
-# ── Request model ─────────────────────────────────────────────
+# Request model
 class StartRequest(BaseModel):
     video: str   # Filename relative to INPUT_DIR (e.g. "video1.mp4")
 
-
-# ── Shared mutable pipeline state (set by start, read by all) ─
+# Shared mutable pipeline state (set by start, read by all)
 # We use a simple dict so the router module stays importable
 # without circular imports (pipeline is imported lazily inside start).
 _state: dict = {
@@ -30,11 +27,9 @@ _state: dict = {
     "web_state": None,
 }
 
-
 def get_web_state() -> WebState | None:
     """Return the current WebState; used by other route modules."""
     return _state["web_state"]
-
 
 @router.post("/api/start")
 async def start_pipeline(req: StartRequest):
@@ -75,7 +70,6 @@ async def start_pipeline(req: StartRequest):
 
     return {"status": "started"}
 
-
 @router.post("/api/stop")
 async def stop_pipeline():
     """Signal the pipeline to stop at the next opportunity."""
@@ -84,7 +78,6 @@ async def stop_pipeline():
         ws.stop_event.set()
     return {"status": "stopped"}
 
-
 @router.post("/api/pause")
 async def pause_pipeline():
     """Freeze the video stream (tracking loop waits in a sleep-loop)."""
@@ -92,7 +85,6 @@ async def pause_pipeline():
     if ws and ws.state == "tracking":
         ws.pause_event.set()
     return {"status": "paused"}
-
 
 @router.post("/api/resume")
 async def resume_pipeline():

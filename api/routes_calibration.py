@@ -1,15 +1,13 @@
-# api/routes_calibration.py
-# ─────────────────────────────────────────────────────────────
+# 
 # Calibration phase endpoints: confirm lane detection and
 # request next frame for a better calibration shot.
 # These routes are only meaningful while state == "calibrating".
-# ─────────────────────────────────────────────────────────────
+# 
 
 from fastapi import APIRouter
 from api.routes_pipeline import get_web_state
 
 router = APIRouter()
-
 
 @router.post("/api/confirm")
 async def confirm_calibration():
@@ -22,7 +20,6 @@ async def confirm_calibration():
     if ws:
         ws.confirm_event.set()
     return {"status": "confirmed"}
-
 
 @router.post("/api/next_frame")
 async def next_frame_calibration():

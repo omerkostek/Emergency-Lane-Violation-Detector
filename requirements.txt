@@ -1,7 +1,4 @@
-# ─────────────────────────────────────────────
-# Emergency Lane Violation Detector
-# Requirements
-# ─────────────────────────────────────────────
+# Emergency Lane Violation Detector Requirements
 
 # Web framework & server
 fastapi>=0.136.1

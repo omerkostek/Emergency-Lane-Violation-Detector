@@ -6,6 +6,7 @@ test_results/
 train_results/
 fps_logs/
 fps_logs_v2/
+notebooks/
 
 # Common Python ignores
 __pycache__/
@@ -29,3 +30,5 @@ env/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+PREPARATION.md

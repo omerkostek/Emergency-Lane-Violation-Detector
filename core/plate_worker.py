@@ -1,5 +1,4 @@
-# core/plate_worker.py
-# ─────────────────────────────────────────────────────────────
+# 
 # Contains:
 #   - parse_turkish_plate(): regex-based Turkish plate formatter
 #   - PlateRecognitionWorker: daemon thread that reads vehicle
@@ -9,7 +8,7 @@
 # slow and must not block the main video processing loop.
 # The best plate per track_id is kept in the shared `best_plates`
 # dict (higher confidence overwrites lower confidence results).
-# ─────────────────────────────────────────────────────────────
+# 
 
 import re
 import time
@@ -23,7 +22,6 @@ from core.config import (
     PLATE_LOCKED_THRESHOLD,
 )
 
-
 def parse_turkish_plate(text):
     """Parse and reformat a raw OCR string into Turkish plate format.
     
@@ -35,7 +33,6 @@ def parse_turkish_plate(text):
     if match:
         return f"{match.group(1)} {match.group(2)} {match.group(3)}"
     return None
-
 
 class PlateRecognitionWorker(threading.Thread):
     """Background daemon thread for license plate recognition.
